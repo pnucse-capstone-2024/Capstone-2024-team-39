@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EV Charging Station Result</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #main-container {
+            display: flex;
+            justify-content: space-between;
+            width: 80%;
+            margin: 20px 0;
+        }
+        #infoPanel {
+            width: 25%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #chart-container {
+            width: 70%;
+        }
+        .gauge {
+            width: 100%;
+            height: 25px;
+            background-color: #f3f3f3;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .chargingBar {
+            height: 100%;
+            background-color: red;
+            transition: width 0.5s;
+        }
+        .dischargingBar {
+            height: 100%;
+            background-color: blue;
+            transition: width 0.5s;
+        }
+
+        /* Simulation area for the car and charging station */
+        #simulationArea {
+            position: relative;
+            width: 600px;
+            height: 200px;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+        #car {
+            position: absolute;
+            width: 80px; /* Increased size of the car */
+            height: auto;
+            transition: left 4.5s; /* Increased duration for smoother and slower transition */
+            left: 0; /* Start position */
+            bottom: 20px; /* Align with charging station */
+            z-index: 10; /* Ensure car is above the charging station */
+        }
+        #chargingStation {
+            position: absolute;
+            left: 500px; /* Position charging station */
+            top: 75px; /* Center vertically */
+            width: 100px; /* Adjust the size as necessary */
+            z-index: 5; /* Lower z-index to make sure the car appears on top */
+        }
+    </style>
+</head>
+<body>
+    <h1 id="title">EV Charging Station Result</h1>
+
+    <div id="main-container">
+        <div id="infoPanel">
+            <h2>Current Information</h2>
+            <p>Date: <span id="currentDate"></span></p>
+            <p id="currentStatus">Simulationing...</p>
+            <div class="gauge">
+                <div class="chargingBar" id="chargingGauge" style="width: 0%;"></div>
+            </div>
+            <p>Total Charging Profit: <span id="currentCharging">0</span> 원</p>
+            <div class="gauge">
+                <div class="dischargingBar" id="dischargingGauge" style="width: 0%;"></div>
+            </div>
+            <p>Total Discharging Profit: <span id="currentDischarging">0</span> 원</p>
+            <p>Total Profit: <span id="totalProfit">0</span> 원</p>
+        </div>
+
+        <div id="chart-container">
+            <canvas id="socChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Simulation Area -->
+    <div id="simulationArea">
+        <img id="car" src="static/carr.png" alt="Car">
+        <img id="chargingStation" src="static/charging_station.png" alt="Charging Station">
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const date = urlParams.get('date');
+            const csId = urlParams.get('cs_id');
+
+            // Update the title with the CS ID
+            $('#title').text(`EV Charging Station - ${csId}`);
+            $('#currentDate').text(date);
+    
+            $.post('/get_soc', { date: date, cs_id: csId }, function(data) {
+                console.log(data);
+                const ctx = document.getElementById('socChart').getContext('2d');
+    
+                // X-axis labels (05:00 ~ next day 02:00, 15-minute intervals)
+                const labels = [];
+                let startTime = new Date(date + 'T05:00:00');
+                for (let i = 0; i < data.soc_series.length; i++) {
+                    labels.push(startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                    startTime.setMinutes(startTime.getMinutes() + 15);
+                }
+    
+                // Initialize the chart
+                const socChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'SoC',
+                            data: [],
+                            borderColor: 'green',
+                            fill: false,
+                            pointRadius: 2,
+                            pointBackgroundColor: 'green',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                }
+                            },
+                            y: {
+                                min: 0.0,
+                                max: 1.1,
+                                title: {
+                                    display: true,
+                                    text: 'State of Charge (SoC)'
+                                }
+                            }
+                        },
+                        animation: false
+                    }
+                });
+    
+                // Declare variables
+                let index = 0;
+                let previousSoC = null;
+                const totalDataPoints = data.soc_series.length;
+                let chargingProfit = 0;
+                let dischargingProfit = 0;
+
+                // Function to move the car based on SoC
+                function moveCar(currentSoC) {
+                    const car = document.getElementById('car');
+                    const chargingStationPosition = 500; // Position of charging station
+                    const carPosition = (currentSoC > 0) ? chargingStationPosition : 0; // Move to charging station if SoC > 0
+                    car.style.left = carPosition + 'px'; // Update the position of the car
+                }
+    
+                const updateInterval = setInterval(function() {
+                    if (index < totalDataPoints) {
+                        const currentSoC = data.soc_series[index];
+                        const chargingPrice = data.charging_price[index];
+                        const dischargingPrice = data.discharging_price[index];
+    
+                        // Charging state
+                        if (currentSoC > 0 && previousSoC !== null) {
+                            const socChange = currentSoC - previousSoC;
+
+                            if (socChange > 0) { // Charging
+                                // If SoC increases from 0, subtract profit if previous SoC was 0
+                                if (previousSoC === 0) {
+                                    // No reflection of chargingProfit
+                                    $('#currentStatus').text("Charging");
+                                } else {
+                                    chargingProfit += socChange * -chargingPrice * 1400; // Calculate based on price
+                                    $('#currentStatus').text("Charging");
+                                }
+                            } else if (socChange < 0) { // Discharging and drops to 0
+                                dischargingProfit += Math.abs(socChange) * dischargingPrice * 1400; // Calculate based on price
+                                $('#currentStatus').text("Discharging");
+                            } else {
+                                $('#currentStatus').text("Status maintaining");
+                            }
+                        } else if (currentSoC === 0 && previousSoC !== null) { // Starting when SoC is 0
+                            $('#currentStatus').text("Simulationing...");
+
+                            // Check if there are any subsequent SoC values that are not 0
+                            if (index + 1 >= totalDataPoints || data.soc_series.slice(index + 1).every(s => s === 0)) {
+                                clearInterval(updateInterval); // Stop updating
+                                
+                                // Output the last 3 SoC values
+                                const lastThreeValues = data.soc_series.slice(index - 2, index + 1);
+                                alert(`Simulation ended\nCharging profit: ${chargingProfit.toFixed(2)} won\nDischarging profit: ${dischargingProfit.toFixed(2)} won\nLast SoC values: ${lastThreeValues.join(', ')}`);
+                                return; // End
+                            }
+                        }
+    
+                        // add current SoC to the graph
+                        socChart.data.datasets[0].data.push(currentSoC);
+                        socChart.update();
+                        
+                        // Move the car based on current SoC
+                        moveCar(currentSoC);
+    
+                        previousSoC = currentSoC; // SoC update
+                        index++;
+                    } else {
+                        clearInterval(updateInterval);
+                    }
+    
+                    // update charging/discharging profit
+                    $('#currentCharging').text(chargingProfit.toFixed(2));
+                    $('#currentDischarging').text(dischargingProfit.toFixed(2));
+                    const totalProfit = chargingProfit + dischargingProfit; // calculate total profit
+                    $('#totalProfit').text(totalProfit.toFixed(2));
+    
+                    // update gauges
+                    $('#chargingGauge').css('width', (chargingProfit / 500 * 100) + '%'); // assume maximum profit of 500
+                    $('#dischargingGauge').css('width', (dischargingProfit / 500 * 100) + '%');
+                }, 300); //update every 0.3 sec
+            });
+        });
+    </script>
+</body>
+</html>
