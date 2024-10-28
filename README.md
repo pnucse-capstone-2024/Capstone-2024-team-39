@@ -53,6 +53,7 @@ pip install wandb
 python run_RL_exp.py --config_file ./example_config_files/V2GProfitMax.yaml
 ```
 (run_RL_exp.py 내에서 학습할 RL 알고리즘 설정 가능)
+
 3. 시뮬레이션 평가하기
 ```
 python run_evaluator_exp.py --config_file ./example_config_files/V2GProfitMax.yaml
