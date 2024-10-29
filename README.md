@@ -82,7 +82,7 @@ python app.py
 ---
 
 ## 4. 소개 및 시연 영상
-[![2024년 전기 졸업과제 39 EnerV2Gize] (https://img.youtube.com/vi/KgGFroZ9M_4/0.jpg)](https://www.youtube.com/watch?v=KgGFroZ9M_4&list=PLFUP9jG-TDp-CVdTbHvql-WoADl4gNkKj&index=38)
+[![2024년 전기 졸업과제 39 EnerV2Gize](https://img.youtube.com/vi/KgGFroZ9M_4/0.jpg)](https://www.youtube.com/watch?v=KgGFroZ9M_4&list=PLFUP9jG-TDp-CVdTbHvql-WoADl4gNkKj&index=38)
 
 
 ## 5. 팀 소개
